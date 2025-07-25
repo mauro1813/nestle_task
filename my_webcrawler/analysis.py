@@ -1,64 +1,94 @@
-
+import argparse
+import glob
+import os
 import pandas as pd
 
-# read CSV
-df = pd.read_csv('internal_all.csv')
 
-# --- SEO Checks ---
+def find_latest(pattern: str):
+    files = glob.glob(pattern)
+    if not files:
+        return None
+    files.sort(key=os.path.getmtime)
+    return files[-1]
 
-# broken pages (status codes 4xx and 5xx)
-broken_pages = df[df['Status Code'].astype(str).str.startswith(('4', '5'))]
 
-# missing titles
-missing_titles = df[df['Title 1'].isnull() | (df['Title 1'].str.strip() == '')]
+def perform_analysis(df: pd.DataFrame):
+    """Run SEO checks over the scraped dataframe."""
+    issue_dfs = {}
+    # Broken pages
+    issue_dfs["Broken Pages"] = df[df['Status Code'].astype(str).str.startswith(('4', '5'))]
+    # Title issues
+    issue_dfs["Missing Titles"] = df[df['Title'].fillna('').str.strip() == '']
+    issue_dfs["Short Titles"] = df[(df['Title Length'] > 0) & (df['Title Length'] < 30)]
+    issue_dfs["Long Titles"] = df[df['Title Length'] > 60]
+    # Meta description issues
+    issue_dfs["Missing Meta"] = df[df['Meta Description'].fillna('').str.strip() == '']
+    issue_dfs["Short Meta"] = df[(df['Meta Description Length'] > 0) & (df['Meta Description Length'] < 70)]
+    issue_dfs["Long Meta"] = df[df['Meta Description Length'] > 160]
+    # H1 issues
+    issue_dfs["Missing H1"] = df[df['H1 Count'] == 0]
+    issue_dfs["Multiple H1"] = df[df['H1 Count'] > 1]
+    return issue_dfs
 
-# too short/long titles
-short_titles = df[(df['Title 1 Length'] > 0) & (df['Title 1 Length'] < 30)]
-long_titles = df[df['Title 1 Length'] > 60]
 
-# meta descriptions
-missing_meta = df[df['Meta Description 1'].isnull() | (df['Meta Description 1'].str.strip() == '')]
+def build_summary(issue_dfs, images_df=None):
+    summary = {issue: len(data) for issue, data in issue_dfs.items()}
+    if images_df is not None:
+        summary['Images Missing Alt'] = images_df['Alt Missing'].sum()
+        summary['Total Images'] = len(images_df)
+    return summary
 
-# too short/long meta descriptions
-short_meta = df[(df['Meta Description 1 Length'] > 0 & (df['Meta Description 1 Length'] < 70))]
-long_meta = df[df['Meta Description 1 Length'] > 160]
 
-# missing H1s
-missing_h1 = df[df['H1-1'].isnull() | (df['H1-1'].str.strip() == '')]
+def write_summary_csv(summary_dict, path):
+    df_summary = pd.DataFrame(list(summary_dict.items()), columns=['Issue', 'Count'])
+    df_summary.to_csv(path, index=False)
 
-# multiple H1s
-multiple_h1 = df[df['H1-2'].notnull() & (df['H1-2'].str.strip() != '')]
 
-# non-indexable pages
-non_indexable = df[df['Indexability'] != 'Indexable']
+def write_overview_txt(summary_csv, images_csv, output_path):
+    df = pd.read_csv(summary_csv)
+    lines = [f"{row['Issue']}: {row['Count']}" for _, row in df.iterrows()]
 
-# Missing canonical tag
-missing_canonical = df[df['Canonical Link Element 1'].isnull() | (df['Canonical Link Element 1'].str.strip() == '')]
+    if images_csv and os.path.exists(images_csv):
+        img_df = pd.read_csv(images_csv)
+        total_images = len(img_df)
+        missing_alt = img_df['Alt Missing'].sum()
+        lines.append(f"Total images: {total_images}")
+        lines.append(f"Images missing alt text: {missing_alt}")
 
-# Low readability (Flesch score < 60) / not implemented in this version of the code
-#low_readability = df[df['Flesch Reading Ease Score'] < 60]
+    with open(output_path, 'w') as f:
+        f.write("\n".join(lines))
 
-# low text ratio (< 10%)
-low_text_ratio = df[df['Text Ratio'] < 10]
 
-# high CO2 pages Might not be applicable in this context, but if CO2 data is available:
-#high_co2 = df[df['CO2 (mg)'] > 1000]
+def main(scrapy_csv=None, images_csv=None):
+    # Determine input files if not provided
+    if not scrapy_csv:
+        scrapy_csv = find_latest('webcrawler_reports/*_scrapy_report.csv')
+        if not scrapy_csv:
+            raise FileNotFoundError('No scrapy report CSV found in webcrawler_reports/')
 
-# Export to Excel
-with pd.ExcelWriter("seo_issues_report.xlsx") as writer:
-    broken_pages.to_excel(writer, sheet_name="Broken Pages", index=False)
-    missing_titles.to_excel(writer, sheet_name="Missing Titles", index=False)
-    short_titles.to_excel(writer, sheet_name="Short Titles", index=False)
-    long_titles.to_excel(writer, sheet_name="Long Titles", index=False)
-    missing_meta.to_excel(writer, sheet_name="Missing Meta", index=False)
-    short_meta.to_excel(writer, sheet_name="Short Meta", index=False)
-    long_meta.to_excel(writer, sheet_name="Long Meta", index=False)
-    missing_h1.to_excel(writer, sheet_name="Missing H1", index=False)
-    multiple_h1.to_excel(writer, sheet_name="Multiple H1", index=False)
-    non_indexable.to_excel(writer, sheet_name="Non-Indexable", index=False)
-    missing_canonical.to_excel(writer, sheet_name="Missing Canonical", index=False)
-    #low_readability.to_excel(writer, sheet_name="Low Readability", index=False)
-    low_text_ratio.to_excel(writer, sheet_name="Low Text Ratio", index=False)
-    #high_co2.to_excel(writer, sheet_name="High CO2", index=False)
+    if not images_csv:
+        guessed = scrapy_csv.replace('_scrapy_report.csv', '_images.csv')
+        images_csv = guessed if os.path.exists(guessed) else find_latest('webcrawler_reports/*_images.csv')
 
-print("SEO report generated: seo_issues_report.xlsx")
+    df = pd.read_csv(scrapy_csv)
+    issues = perform_analysis(df)
+    summary = build_summary(issues, pd.read_csv(images_csv) if images_csv else None)
+
+    domain = os.path.basename(scrapy_csv).replace('_scrapy_report.csv', '')
+    summary_csv = os.path.join('webcrawler_reports', f'{domain}_analysis_summary.csv')
+    overview_txt = os.path.join('webcrawler_reports', f'{domain}_analysis_overview.txt')
+
+    write_summary_csv(summary, summary_csv)
+    write_overview_txt(summary_csv, images_csv, overview_txt)
+
+    print(f'Analysis summary CSV saved to: {summary_csv}')
+    print(f'Overview TXT saved to: {overview_txt}')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Analyse Scrapy crawler output')
+    parser.add_argument('--scrapy-csv', help='Path to _scrapy_report.csv file')
+    parser.add_argument('--images-csv', help='Path to images CSV file')
+    args = parser.parse_args()
+
+    main(scrapy_csv=args.scrapy_csv, images_csv=args.images_csv)
