@@ -15,11 +15,6 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
         self.pages_crawled = 0
         self.allowed_domains = [urlparse(start_url).netloc]
         self.results = []
-        # keep a reference to each page data by URL so it can be
-        # updated later with broken link information
-        self.page_data_by_url = {}
-        # store broken links detected for each page
-        self.broken_links = {}
         
         # Output CSV file setup
         domain_name = urlparse(start_url).netloc.replace('www.', '').replace('.', '_')
@@ -28,10 +23,6 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
         self.csv_filename = os.path.join(output_folder, f"{domain_name}_scrapy_report.csv")
     
     def parse(self, response):
-        # If this request came from another page, check if it's broken
-        source_url = response.meta.get('source_url')
-        if source_url and response.status >= 400:
-            self.broken_links.setdefault(source_url, []).append(response.url)
 
         # Do not crawl more pages than the limit
         if self.pages_crawled >= self.max_pages:
@@ -50,8 +41,11 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
         
         h2_count = len(response.css('h2').getall())
 
-        # detect images missing alt text
-        images_missing_alt = response.xpath("//img[not(@alt) or normalize-space(@alt)='']/@src").getall()
+        # collect alt text for each image, using 'Missing' when no alt attribute
+        image_alt_texts = []
+        for img in response.css('img'):
+            alt = img.attrib.get('alt', '').strip()
+            image_alt_texts.append(alt if alt else 'Missing')
         
         # I might delete this if not needed
         # body_text = ' '.join(response.css('body *::text').getall())
@@ -73,14 +67,10 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
             'Response Time (ms)': int(response.meta.get('download_latency', 0) * 1000),
             'Content Type': response.headers.get('content-type', b'').decode('utf-8'),
             'Content Length': len(response.body),
-            # will be filled later with URLs that return error codes
-            'Broken Links': '',
-            # list of image sources missing alt text
-            'Images Missing Alt': '; '.join(images_missing_alt),
+            'Image Alt Texts': '; '.join(image_alt_texts),
         }
         
         self.results.append(page_data)
-        self.page_data_by_url[response.url] = page_data
         
         yield page_data
         
@@ -89,22 +79,17 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
             for link in response.css('a::attr(href)').getall():
                 # Filtrar enlaces no válidos
                 if link and not link.startswith(('javascript:', 'mailto:', 'tel:', '#')):
-                    yield response.follow(link, self.parse, meta={'source_url': response.url})
+                    yield response.follow(link, self.parse)
     
     def closed(self, reason):
         # Save results to CSV file when spider is closed
         if self.results:
-            # update each page data with any broken links found
-            for url, links in self.broken_links.items():
-                if url in self.page_data_by_url:
-                    self.page_data_by_url[url]['Broken Links'] = '; '.join(links)
-
             fieldnames = [
                 'URL', 'Status Code', 'Title', 'Title Length',
                 'Meta Description', 'Meta Description Length', 'Meta Keywords',
                 'H1 Count', 'H1 Text', 'H2 Count', #'Word Count', # Uncomment if needed
                 'Response Time (ms)', 'Content Type', 'Content Length',
-                'Broken Links', 'Images Missing Alt'
+                'Image Alt Texts'
             ]
             
             with open(self.csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
