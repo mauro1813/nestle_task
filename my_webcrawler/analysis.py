@@ -84,6 +84,7 @@ def main(scrapy_csv=None, images_csv=None):
     print(f'Analysis summary CSV saved to: {summary_csv}')
     print(f'Overview TXT saved to: {overview_txt}')
 
+    return summary_csv, overview_txt
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyse Scrapy crawler output')
