@@ -8,7 +8,7 @@ from scrapy.utils.project import get_project_settings
 class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
     name = 'seo_crawler'
     
-    def __init__(self, start_url=None, max_pages=500, *args, **kwargs):
+    def __init__(self, start_url=None, max_pages=5000, *args, **kwargs):
         super(SEOSpider, self).__init__(*args, **kwargs)
         self.start_urls = [start_url] if start_url else []
         self.max_pages = int(max_pages)
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     url = sys.argv[1]
-    max_pages = int(sys.argv[2]) if len(sys.argv) > 2 else 500
+    max_pages = int(sys.argv[2]) if len(sys.argv) > 2 else 5000
     
     # URL validation
     if not url.startswith(('http://', 'https://')):
