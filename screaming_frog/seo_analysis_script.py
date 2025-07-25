@@ -20,7 +20,7 @@ long_titles = df[df['Title 1 Length'] > 60]
 missing_meta = df[df['Meta Description 1'].isnull() | (df['Meta Description 1'].str.strip() == '')]
 
 # too short/long meta descriptions
-short_meta = df[(df['Meta Description 1 Length'] > 0 & (df['Meta Description 1 Length'] < 70))]
+short_meta = df[(df['Meta Description 1 Length'] > 0) & (df['Meta Description 1 Length'] < 70)]
 long_meta = df[df['Meta Description 1 Length'] > 160]
 
 # missing H1s
