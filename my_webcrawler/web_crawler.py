@@ -15,12 +15,16 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
         self.pages_crawled = 0
         self.allowed_domains = [urlparse(start_url).netloc]
         self.results = []
+        self.image_results = []
         
         # Output CSV file setup
         domain_name = urlparse(start_url).netloc.replace('www.', '').replace('.', '_')
         output_folder = "webcrawler_reports"
         os.makedirs(output_folder, exist_ok=True)
         self.csv_filename = os.path.join(output_folder, f"{domain_name}_scrapy_report.csv")
+        self.images_csv_filename = os.path.join(
+            output_folder, f"{domain_name}_images.csv"
+        )
     
     def parse(self, response):
 
@@ -41,11 +45,16 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
         
         h2_count = len(response.css('h2').getall())
 
-        # collect alt text for each image, using 'Missing' when no alt attribute
-        image_alt_texts = []
+        # collect image information for separate CSV
         for img in response.css('img'):
             alt = img.attrib.get('alt', '').strip()
-            image_alt_texts.append(alt if alt else 'Missing')
+            src = img.attrib.get('src', '')
+            self.image_results.append({
+                'Page URL': response.url,
+                'Image URL': response.urljoin(src),
+                'Alt Text': alt,
+                'Alt Missing': alt == ''
+            })
         
         # I might delete this if not needed
         # body_text = ' '.join(response.css('body *::text').getall())
@@ -67,7 +76,6 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
             'Response Time (ms)': int(response.meta.get('download_latency', 0) * 1000),
             'Content Type': response.headers.get('content-type', b'').decode('utf-8'),
             'Content Length': len(response.body),
-            'Image Alt Texts': '; '.join(image_alt_texts),
         }
         
         self.results.append(page_data)
@@ -88,17 +96,25 @@ class SEOSpider(scrapy.Spider): #Spider web crawler for SEO analysis
                 'URL', 'Status Code', 'Title', 'Title Length',
                 'Meta Description', 'Meta Description Length', 'Meta Keywords',
                 'H1 Count', 'H1 Text', 'H2 Count', #'Word Count', # Uncomment if needed
-                'Response Time (ms)', 'Content Type', 'Content Length',
-                'Image Alt Texts'
+                'Response Time (ms)', 'Content Type', 'Content Length'
             ]
-            
+
             with open(self.csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(self.results)
-            
+
             print(f"\nResultados guardados en: {self.csv_filename}")
             print(f"Total de páginas crawleadas: {len(self.results)}")
+
+        if self.image_results:
+            image_fieldnames = ['Page URL', 'Image URL', 'Alt Text', 'Alt Missing']
+            with open(self.images_csv_filename, 'w', newline='', encoding='utf-8') as img_csv:
+                writer = csv.DictWriter(img_csv, fieldnames=image_fieldnames)
+                writer.writeheader()
+                writer.writerows(self.image_results)
+
+            print(f"Lista de imágenes guardada en: {self.images_csv_filename}")
 
 def run_scrapy_crawler(url, max_pages=5000):
     """Ejecuta el crawler de Scrapy"""
