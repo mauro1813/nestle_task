@@ -1,8 +1,14 @@
-
 import pandas as pd
+import os
+import sys
+
+# determine CSV file to read
+csv_file = sys.argv[1] if len(sys.argv) > 1 else "internal_all.csv"
+csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), csv_file)
 
 # read CSV
 df = pd.read_csv('internal_all.csv')
+df = pd.read_csv(csv_path)
 
 # --- SEO Checks ---
 
