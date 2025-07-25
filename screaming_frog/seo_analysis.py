@@ -5,6 +5,8 @@ import sys
 # determine CSV file to read
 csv_file = sys.argv[1] if len(sys.argv) > 1 else "internal_all.csv"
 csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), csv_file)
+base_name = os.path.splitext(csv_file)[0]
+output_excel = f"{base_name}_seo_issues_report.xlsx"
 
 # read CSV
 df = pd.read_csv(csv_path)
@@ -50,7 +52,7 @@ low_text_ratio = df[df['Text Ratio'] < 10]
 #high_co2 = df[df['CO2 (mg)'] > 1000]
 
 # Export to Excel
-with pd.ExcelWriter("seo_issues_report.xlsx") as writer:
+with pd.ExcelWriter(output_excel) as writer:
     broken_pages.to_excel(writer, sheet_name="Broken Pages", index=False)
     missing_titles.to_excel(writer, sheet_name="Missing Titles", index=False)
     short_titles.to_excel(writer, sheet_name="Short Titles", index=False)
@@ -66,4 +68,4 @@ with pd.ExcelWriter("seo_issues_report.xlsx") as writer:
     low_text_ratio.to_excel(writer, sheet_name="Low Text Ratio", index=False)
     #high_co2.to_excel(writer, sheet_name="High CO2", index=False)
 
-print("SEO report generated: seo_issues_report.xlsx")
+print(f"SEO report generated: {output_excel}")
