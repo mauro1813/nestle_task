@@ -24,9 +24,16 @@ def main():
     parser = argparse.ArgumentParser(description="Run crawler and analysis")
     parser.add_argument("url", help="Starting URL for the crawl")
     parser.add_argument(
-        "--max-pages",
+        "max_pages_positional",
+        nargs="?",
         type=int,
-        default=500,
+        help="Maximum number of pages to crawl",
+    )
+    parser.add_argument(
+        "--max-pages",
+        dest="max_pages",
+        type=int,
+        default=None,
         help="Maximum number of pages to crawl",
     )
     args = parser.parse_args()
@@ -35,7 +42,11 @@ def main():
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
-    run_scrapy_crawler(url, args.max_pages)
+    max_pages = args.max_pages
+    if max_pages is None:
+        max_pages = args.max_pages_positional if args.max_pages_positional is not None else 500
+
+    run_scrapy_crawler(url, max_pages)
 
     domain = _domain_name(url)
     output_folder = "webcrawler_reports"
