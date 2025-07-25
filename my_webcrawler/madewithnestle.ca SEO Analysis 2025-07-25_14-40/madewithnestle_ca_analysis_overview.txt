@@ -1,0 +1,13 @@
+Broken Pages: 0
+Missing Titles: 0
+Short Titles: 6
+Long Titles: 32
+Missing Meta: 2
+Short Meta: 2
+Long Meta: 63
+Missing H1: 1310
+Multiple H1: 2
+Images Missing Alt: 23154
+Total Images: 141074
+Total images: 141074
+Images missing alt text: 23154
